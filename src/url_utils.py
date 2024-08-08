@@ -47,9 +47,9 @@ def get_rutube_playlist_video_ids(playlist_url, logger):
     try:
         response = requests.get(playlist_url)
         if response.status_code != 200:
-            logger.error(f"Failed to retrieve playlist page: {response.status_code}")
+            logger.error(f"Не удалось получить страницу плейлиста: {response.status_code}")
             return []
-        logger.info(f"Playlist page retrieved successfully: {playlist_url}")
+        logger.info(f"Страница плейлиста успешно получена: {playlist_url}")
 
         soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -57,11 +57,11 @@ def get_rutube_playlist_video_ids(playlist_url, logger):
         for video_tag in soup.select('a.wdp-playlist-video-card-module__title'):
             video_id = video_tag['href'].split('/')[2]
             video_ids.append(video_id)
-            logger.info(f"Found video ID: {video_id}")
+            logger.info(f"Найдено видео с ID: {video_id}")
 
         if not video_ids:
-            logger.error(f"No video IDs found in playlist: {playlist_url}")
+            logger.error(f"Не найдено ни одного видео в плейлисте: {playlist_url}")
         return video_ids
     except Exception as e:
-        logger.error(f"Error while scraping playlist page: {e}")
+        logger.error(f"Ошибка при скрапинге страницы плейлиста: {e}")
         return []
