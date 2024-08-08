@@ -1,0 +1,10 @@
+output_dir: "E:/EMO/"
+num_workers: 4 # количество потоков для обрабокти
+use_playlists: true  # Установить на false для индивидуальной загрузки видео
+video_urls_file: "video_urls.txt"  # Используется когда "use_playlists" false
+playlists_file: "playlist_urls.txt"
+video_quality: "144p"  #  Параметр для качества видео | Если не указано, берется максимальное
+logging:
+  file_logging: false
+  console_logging: true
+  log_dir: './logs'
