@@ -1,3 +1,4 @@
+# coding: utf-8
 import csv
 import os
 import json
@@ -9,7 +10,8 @@ from .url_utils import get_video_id
 def cleanup_info_json_files(output_dir, config):
     logger = setup_logging(config)
     for filename in os.listdir(output_dir):
-        if filename.endswith('.info.json'):
+        # чистим .info.json + временные хвосты .part/.ytdl
+        if filename.endswith('.info.json') or filename.endswith('.part') or filename.endswith('.ytdl'):
             file_path = os.path.join(output_dir, filename)
             try:
                 os.remove(file_path)
@@ -57,8 +59,12 @@ def update_metadata_to_csv(metadata, output_dir, config):
     logger = setup_logging(config)
     csv_path = os.path.join(output_dir, 'video_metadata.csv')
 
-    # Определяем точный список полей, которые нужно сохранить
-    required_fields = ['id', 'file_name', 'height', 'width', 'fps', 'duration', 'sample_rate', 'audio_channels', 'file_size', 'video_url', 'title', 'platform']
+    # Поля, которые сохраняем
+    required_fields = [
+        'id', 'file_name', 'height', 'width', 'fps', 'duration',
+        'sample_rate', 'audio_channels', 'file_size',
+        'video_url', 'title', 'platform'
+    ]
 
     try:
         if not os.path.isfile(csv_path):
@@ -80,6 +86,9 @@ def update_metadata_to_csv(metadata, output_dir, config):
 
             if not updated:
                 rows.append(metadata)
+
+            # Стабильный порядок: по платформе и по id
+            rows.sort(key=lambda r: (r.get('platform', ''), r.get('id', '')))
 
             with open(csv_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=required_fields)
@@ -106,14 +115,12 @@ def update_metadata(video_id, new_metadata, output_dir, config):
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(existing_metadata, f, ensure_ascii=False, indent=4)
 
-        # logger.info(f"Метаданные обновлены для видео {video_id}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при обновлении метаданных для видео {video_id}: {e}")
         return False
 
 def get_cached_metadata(video_id, output_dir, config):
-
     logger = setup_logging(config, worker=True)
     json_path = os.path.join(output_dir, f"{video_id}_metadata.json")
     if os.path.exists(json_path):
@@ -125,7 +132,6 @@ def get_cached_metadata(video_id, output_dir, config):
     return None
 
 def compare_metadata(old_metadata, new_metadata):
-
     differences = {}
     for key in set(old_metadata.keys()) | set(new_metadata.keys()):
         if key not in old_metadata:
@@ -138,7 +144,6 @@ def compare_metadata(old_metadata, new_metadata):
 
 def process_video_metadata(video_url, file_path, output_dir, config):
     logger = setup_logging(config, worker=True)
-    # video_id = get_video_id(video_url)
     platform, video_id = get_video_id(video_url)
 
     # Проверяем наличие кэшированных метаданных
@@ -147,8 +152,22 @@ def process_video_metadata(video_url, file_path, output_dir, config):
     # Получаем метаданные из файла
     file_metadata = get_file_metadata(file_path, config)
 
-    # Получаем минимальную информацию из YouTube
-    ydl_opts = {'quiet': True}
+    # Тихий YoutubeDL (глушим предупреждения yt-dlp)
+    class _YtdlpSilentLogger:
+        def debug(self, msg):
+            pass
+        def warning(self, msg):
+            pass
+        def error(self, msg):
+            # оставим вывод ошибок в наш лог, если вдруг что-то важное
+            setup_logging(config, worker=True).error(msg)
+
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'logger': _YtdlpSilentLogger(),
+    }
+
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_url, download=False)
 
@@ -160,7 +179,7 @@ def process_video_metadata(video_url, file_path, output_dir, config):
         'fps': file_metadata.get('fps', 'N/A'),
         'duration': file_metadata.get('duration', 'N/A'),
         'sample_rate': file_metadata.get('sample_rate', 'N/A'),
-        'title': info['title'],
+        'title': info.get('title', 'N/A'),
         'platform': platform,
         'video_url': video_url,
         'audio_channels': file_metadata.get('channels', 'N/A'),
@@ -179,7 +198,10 @@ def process_video_metadata(video_url, file_path, output_dir, config):
     update_metadata(video_id, new_metadata, output_dir, config)
 
     # Проверка наличия всех необходимых метаданных
-    required_fields = ['id', 'file_name', 'height', 'width', 'fps', 'duration', 'sample_rate', 'audio_channels', 'file_size', 'video_url', 'title', 'platform']
+    required_fields = [
+        'id', 'file_name', 'height', 'width', 'fps', 'duration',
+        'sample_rate', 'audio_channels', 'file_size', 'video_url', 'title', 'platform'
+    ]
     if all(new_metadata.get(key) != 'N/A' for key in required_fields):
         logger.info(f"Метаданные успешно извлечены для видео {video_id}")
     else:

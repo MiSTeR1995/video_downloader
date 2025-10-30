@@ -13,6 +13,7 @@ def setup_logging(config, worker=False):
         logger = logging.getLogger('main')
 
     logger.setLevel(log_level)
+    logger.propagate = False
 
     if not logger.handlers:
         if config['logging']['console_logging']:
